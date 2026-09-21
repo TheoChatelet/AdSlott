@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  passwordHash       String
+  isAdmin            Boolean  @default(false)
+  walletBalanceCents Int      @default(0)
+  createdAt          DateTime @default(now())
+
+  ads          Ad[]
+  transactions WalletTransaction[]
+  pollVotes    PollVote[]
+}
+
+model Slot {
+  id                String   @id @default(cuid())
+  label             String
+  position           Int     @unique
+  currentPriceCents Int      @default(100)
+  currentAdId       String?  @unique
+  lastResetDate     DateTime @db.Date
+  createdAt         DateTime @default(now())
+
+  currentAd  Ad?             @relation("CurrentAd", fields: [currentAdId], references: [id])
+  ads        Ad[]            @relation("SlotAds")
+  dailyStats SlotDailyStat[]
+}
+
+model Ad {
+  id         String   @id @default(cuid())
+  slotId     String
+  userId     String
+  priceCents Int
+  text       String
+  link       String?
+  imageUrl   String?
+  isHidden   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  slot              Slot               @relation("SlotAds", fields: [slotId], references: [id])
+  user              User               @relation(fields: [userId], references: [id])
+  currentForSlot    Slot?              @relation("CurrentAd")
+  walletTransaction WalletTransaction?
+
+  @@index([slotId, createdAt])
+}
+
+model SlotDailyStat {
+  id            String   @id @default(cuid())
+  slotId        String
+  date          DateTime @db.Date
+  maxPriceCents Int      @default(0)
+  bidCount      Int      @default(0)
+  revenueCents  Int      @default(0)
+
+  slot Slot @relation(fields: [slotId], references: [id])
+
+  @@unique([slotId, date])
+}
+
+model WalletTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  amountCents Int
+  adId        String?  @unique
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  ad   Ad?  @relation(fields: [adId], references: [id])
+}
+
+enum DailyContentType {
+  CHALLENGE
+  POLL
+}
+
+model DailyContent {
+  id       String           @id @default(cuid())
+  date     DateTime         @unique @db.Date
+  type     DailyContentType
+  question String
+  options  Json?
+
+  votes PollVote[]
+}
+
+model PollVote {
+  id             String   @id @default(cuid())
+  dailyContentId String
+  userId         String
+  optionIndex    Int
+  createdAt      DateTime @default(now())
+
+  dailyContent DailyContent @relation(fields: [dailyContentId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@unique([dailyContentId, userId])
+}
